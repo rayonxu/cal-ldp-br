@@ -1,0 +1,367 @@
+% !TEX program = pdflatex
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Calibrated Bayesian Local Differential Privacy for Lightweight
+%% Learning Path Recommendation
+%% Springer Nature (sn-jnl) submission version, IJMLC
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[pdflatex,sn-basic,Numbered]{sn-jnl}
+
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsthm}
+\usepackage{mathrsfs}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{array}
+\usepackage{manyfoot}
+\usepackage{url}
+
+\graphicspath{{../figures/}}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\newcommand{\eps}{\varepsilon}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Prob}{\Pr}
+\newcommand{\logit}{\operatorname{logit}}
+\newcommand{\clip}{\operatorname{clip}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\HR}{\mathrm{HR}}
+\newcommand{\NDCG}{\mathrm{NDCG}}
+\newcommand{\AUC}{\mathrm{AUC}}
+
+\flushbottom
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.5}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.85}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+
+\hypersetup{%
+  pdftitle={Calibrated Bayesian Local Differential Privacy for Lightweight Learning Path Recommendation},
+  pdfauthor={Author One, Author Two, Author Three},
+  pdfkeywords={local differential privacy, randomised response, Bayesian calibration, learning path recommendation}}
+
+% Compact reference list so that it ends on a full page.
+\setlength{\bibsep}{0.55em}
+\makeatletter
+\def\bibfont{\reset@font\fontfamily{\rmdefault}\small\selectfont}
+\makeatother
+
+\begin{document}
+
+\title[Calibrated Bayesian LDP for Learning Paths]{Calibrated Bayesian Local Differential Privacy for Lightweight Learning Path Recommendation}
+
+\author*[1]{\fnm{Author} \sur{One}}\email{author.one@example.edu}
+\author[2]{\fnm{Author} \sur{Two}}\email{author.two@example.edu}
+\author[1]{\fnm{Author} \sur{Three}}\email{author.three@example.edu}
+
+\affil*[1]{\orgdiv{Department}, \orgname{University}, \orgaddress{\street{Street}, \city{City}, \postcode{000000}, \country{Country}}}
+\affil[2]{\orgdiv{Department}, \orgname{University}, \orgaddress{\street{Street}, \city{City}, \postcode{000000}, \country{Country}}}
+
+\abstract{Learning path recommenders exploit student--exercise interactions to personalise study sequences, but raw logs expose sensitive knowledge states. Local differential privacy (LDP) protects each student before data leave the device, yet randomised-response (RR) noise normally destroys ranking utility. We propose calibrated Bayesian LDP ranking (Cal-LDP-BR): clients publish Warner-RR reports under a stringent budget, the server estimates item marginals by the method of moments, and candidates are ranked by the Bayesian posterior log-odds of a true interaction. Both server steps are post-processing, so they consume no additional budget, and scoring is linear in the candidate set with no graph training. We show that the score decomposes exactly into a per-report evidence term of magnitude $\eps$ and an item-prior log-odds term, which explains the non-monotone utility--budget curves observed in practice. On ASSISTments 2009, ASSISTments 2015 and EdNet, Cal-LDP-BR at $\eps=0.02$ attains HR@10 of 0.3907, 0.3855 and 0.4127 with membership-inference AUC of 0.656, 0.654 and 0.661, the highest HR@10 among all evaluated $\eps$-LDP methods on all three benchmarks. Results use five fixed seeds, paired tests, strict leave-last-out splitting and released code.}
+
+\keywords{Local differential privacy, Randomised response, Bayesian calibration, Learning path recommendation, Educational data mining, Privacy-preserving recommendation}
+
+\maketitle
+
+\section{Introduction}\label{sec:intro}
+
+Online learning platforms record fine-grained student--exercise interactions, and these records support personalised learning path recommendation: the task of ordering candidate exercises so that the next useful item appears as early as possible. Deep learning and graph neural network (GNN) recommenders model higher-order structure among students, exercises and knowledge points \cite{kipf2017gcn,zhang2019survey,ying2018pinsage,wu2021gnnsurvey}, but two practical obstacles limit real-world deployment.
+
+The first obstacle is privacy. Interaction logs reveal knowledge mastery, error patterns and study habits, and centralising and training on raw records conflicts with data-protection regulations such as the GDPR and the Personal Information Protection Law (PIPL) \cite{himeur2022review}. Local differential privacy (LDP) perturbs each record on the client so that raw data never leave the device \cite{duchi2013local,kairouz2016discrete,wang2017ldp}. LDP is attractive for education because it removes the need for a trusted aggregator, which platforms and schools rarely provide across administrative boundaries.
+
+The second obstacle is cost. Multi-layer GNNs incur substantial training and inference overhead, which is prohibitive for the CPU-only, latency-sensitive serving stacks common in educational products. Simplified graph convolution (SGC) collapses neighbourhood propagation into a single precomputable linear operator \cite{wu2019sgc}, and LightGCN removes feature transformations and nonlinearities \cite{he2020lightgcn}; both reduce cost but still require a graph encoder and, when combined with LDP, a graph reconstructed from noisy edges.
+
+The two obstacles interact. Standard edge-level randomised response \cite{warner1965rr} on a sparse educational graph injects many false edges, and the genuine interaction signal, which is concentrated in a small fraction of the $|U|\times|P|$ cells, is overwhelmed. Recent locally private graph learning frameworks mitigate this distortion through degree-preserving perturbations \cite{hidano2024degree}, local neighbourhood augmentation \cite{pei2024privacy}, or Bayesian topology denoising with separate degree-sequence budgets for downstream GNN training \cite{zhu2023blink}. These approaches spend privacy budget on structural quantities and still train a graph encoder on a noisy adjacency.
+
+This paper takes a different route. Rather than treating released bits as hard graph edges, we treat single-pass Warner-RR reports as noisy observations of Bernoulli interaction indicators, reconstruct item-conditional interaction probabilities by method-of-moments calibration, and rank candidates by the Bayesian posterior log-odds of a true interaction. The resulting procedure requires no graph training, no degree release in its primary form, and no additional privacy budget on the server, because calibration and ranking are post-processing of the released report matrix. We refer to it as Cal-LDP-BR.
+
+The design raises three questions that this paper answers. (i) \emph{Can a ranker remain informative when the per-bit signal is far below the noise level?} Yes, in a precise sense: the posterior log-odds score decomposes into a per-report evidence term and an item-prior term (Proposition~\ref{prop:decomposition}), which shows how the two sources combine and why the utility--budget curve is non-monotone (Section~\ref{sec:regimes}). (ii) \emph{What does calibration cost in privacy terms?} Nothing beyond the released reports: the moment estimator is a deterministic function of the report matrix, so post-processing invariance applies (Theorem~\ref{thm:privacy}). (iii) \emph{Do graph encoders and public skill taxonomies add value on sparse educational graphs?} Empirically they do not, and we report those negative results rather than discarding them (Section~\ref{sec:ablation}).
+
+The main contributions are summarised as follows.
+\begin{enumerate}
+\item We propose Cal-LDP-BR, a calibrated Bayesian LDP ranker that reconstructs item-conditional interaction probabilities from Warner-RR reports and ranks candidate exercises by posterior log-odds (Sections~\ref{sec:method}--\ref{sec:theory}). The moment estimator is unbiased before clipping, its variance is available in closed form, and the ranking rule is Bayes-optimal under the RR likelihood.
+\item We give a complete privacy treatment: standard Warner RR establishes the exact $\eps$-LDP guarantee of the primary method, while sampling amplification and private degree release are analysed as an optional adaptive variant with explicit composition accounting (Theorem~\ref{thm:privacy} and Lemma~\ref{lem:amplification}).
+\item We derive an exact decomposition of the ranking score into evidence and prior components, and use it to explain the non-monotone utility--budget behaviour that LDP rankers exhibit under leave-last-out evaluation (Proposition~\ref{prop:decomposition}, Section~\ref{sec:regimes}).
+\item We investigate a lightweight SGC alternative with soft posterior weights and a public skill graph; ablation studies show that neither component improves utility on the tested sparse educational graphs, and the negative results are retained (Section~\ref{sec:ablation}).
+\item We conduct a reproducible evaluation under strict leave-last-out splitting across five fixed seeds, including paired $t$-tests, Wilcoxon signed-rank tests with exact attainable $p$-values, 95\% confidence intervals for paired differences, full $\eps$-sensitivity sweeps, a full-population validation, and public release of code and processing scripts (Section~\ref{sec:experiments}).
+\end{enumerate}
+
+The remainder of the paper is organised as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:prelim} introduces preliminaries and the problem formulation. Section~\ref{sec:method} presents Cal-LDP-BR, the optional adaptive variant and the lightweight SGC variant. Section~\ref{sec:theory} provides the privacy and utility analysis. Section~\ref{sec:experiments} reports experimental results, statistical tests and sensitivity analyses. Section~\ref{sec:discussion} discusses implications and threats to validity, and Section~\ref{sec:conclusion} concludes.
+
+\section{Related work}\label{sec:related}
+
+\subsection{Learning path recommendation and knowledge tracing}
+
+Learning path recommenders span knowledge-tracing, sequence-based and graph-based approaches. Deep knowledge tracing (DKT) models capture temporal skill mastery from exercise sequences \cite{piech2015dkt}, and exercise-aware variants enrich the hidden state with exercise metadata \cite{liu2021ekt}. Graph-based models construct student--exercise or multi-source interaction graphs and apply graph convolutional encoders such as GCN \cite{kipf2017gcn}, PinSage \cite{ying2018pinsage}, NGCF \cite{wang2019ngcf} and multi-source fusion models \cite{cheng2019friend} to capture collaborative and structural signals \cite{zhang2019survey,wu2021gnnsurvey}; graph-based knowledge tracing applies the same idea to skill graphs \cite{nakagawa2019gkt}. Surveys of learning path personalisation document the dominance of sequence models and the scarcity of formal privacy guarantees in deployed systems \cite{nabizadeh2020survey,shi2020learningpath}.
+
+Two properties of educational data shape the design space. First, interaction matrices are extremely sparse: a student solves tens to hundreds of exercises out of thousands, so most collaborative filtering signals are weak and item popularity is a strong baseline. Second, the evaluation protocol is naturally leave-last-out, because the practical task is to predict the next item rather than to fill in random missing entries. Both properties interact with privacy noise in ways that random-split recommendation benchmarks do not reveal, and we therefore adopt a strict leave-last-out protocol throughout (Section~\ref{sec:protocol}).
+
+\subsection{Differential privacy and local differential privacy}
+
+Differential privacy (DP) provides rigorous guarantees against individual record inference \cite{dwork2006calibrating,dwork2014algorithmic}. In recommender systems, DP has been applied to matrix factorisation \cite{mcsherry2009dp,ran2022dpnmf} and to privacy-preserving frameworks reviewed in \cite{himeur2022review}. These approaches assume a trusted curator that holds the raw data.
+
+LDP removes that assumption by perturbing each user's data on the client \cite{duchi2013local,kairouz2016discrete,kasiviswanathan2011private}. Warner's randomised response is the canonical binary mechanism \cite{warner1965rr}; large-scale deployments such as RAPPOR \cite{erlingsson2014rappor} and frequency-estimation protocols \cite{bassily2015local,wang2017ldp,cormode2018frequency} extend it to categorical and ordinal domains. For graph-structured data, LDP has been applied to topology and metric estimation \cite{ye2022lfgdpr}, degree-preserving randomised response \cite{hidano2024degree}, local graph augmentation against attribute and link-stealing attacks \cite{pei2024privacy}, and Bayesian link denoising for GNN training \cite{zhu2023blink}. Recently, Bayesian reconstruction from RR reports has been introduced for implicit-feedback recommendation \cite{tang2025bayesian}. Our work specialises this paradigm to educational learning paths without requiring graph training or auxiliary degree budgets, and evaluates both theoretical budgets and empirical membership-inference leakage.
+
+\subsection{Privacy amplification, composition and empirical leakage}
+
+Sampling amplification and sequential composition are the standard tools for converting per-record budgets into end-to-end guarantees \cite{kasiviswanathan2011private,dwork2014algorithmic,balle2018amplification}. Because formal guarantees are necessary but not sufficient for user trust, empirical leakage is increasingly reported alongside the budget. Membership-inference attacks \cite{shokri2017mia} and their likelihood-ratio refinements \cite{carlini2022mia} provide a reproducible way to measure whether a released artefact reveals whether a particular record was used. We report both the theoretical budget and an empirical membership-inference AUC.
+
+\subsection{Lightweight graph convolution}
+
+LightGCN simplifies graph collaborative filtering by removing feature transformations and nonlinear activations \cite{he2020lightgcn}, while SGC further precomputes $K$-order propagation into a single linear smoothing step \cite{wu2019sgc}. Lightweight graph encoders are rarely combined with formal local privacy guarantees in educational settings. We examine whether SGC over calibrated soft graphs offers gains over direct posterior ranking, and we report the outcome either way.
+
+Table~\ref{tab:related} positions Cal-LDP-BR against the closest locally private graph learning approaches.
+
+\begin{table}[t]
+\caption{Positioning against locally private graph learning approaches.}
+\label{tab:related}
+\footnotesize
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+Approach & Perturbation & Graph enc. & Degree $\eps$ & Bayes.\ calib. & Sparse educ. & CPU serving \\
+\midrule
+Edge RR + GCN \cite{sajadmanesh2021lpgnn} & edge RR & yes & no & no & partial & no \\
+Degree-pres.\ RR \cite{hidano2024degree} & degree-aware RR & yes & implicit & no & no & no \\
+Local augmentation \cite{pei2024privacy} & edge RR & yes & no & no & no & no \\
+Blink \cite{zhu2023blink} & edge RR & yes & yes & yes & no & no \\
+Bayesian LDP rec.\ \cite{tang2025bayesian} & item RR & no & no & yes & no & yes \\
+\textbf{Cal-LDP-BR} (this work) & Warner RR & no & optional & yes & yes & yes \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize ``Graph enc.''\ denotes an iterative encoder trained on a noisy adjacency; ``degree $\eps$''\ denotes budget spent on releasing degree information; ``Bayes.\ calib.''\ denotes explicit reconstruction of interaction probabilities from RR reports; ``sparse educ.''\ denotes evaluation on educational interaction graphs with leave-last-out protocols.}
+\end{table}
+
+\section{Preliminaries and problem formulation}\label{sec:prelim}
+
+\subsection{Notation}
+
+Table~\ref{tab:notation} collects the notation used throughout. Vectors are column vectors and $\mathbf{1}[\cdot]$ denotes the indicator function.
+
+\begin{table}[t]
+\caption{Notation.}
+\label{tab:notation}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$U$, $P$ & sets of students and exercises, $n=|U|$, $m=|P|$ \\
+$R\in\{0,1\}^{n\times m}$ & binary interaction matrix, $R_{u,i}=1$ if student $u$ interacted with exercise $i$ \\
+$x_{u}\in\{0,1\}^{m}$ & interaction vector of student $u$ (a row of $R$) \\
+$d_u=\sum_i x_{u,i}$ & number of interactions of student $u$ \\
+$\eps$ & local privacy budget \\
+$p$, $q$ & RR true-positive and false-positive reporting probabilities, Eq.~\eqref{eq:rr} \\
+$A\in\{0,1\}^{n\times m}$ & released report matrix, $A_{u,i}$ is the reported bit \\
+$\bar a_i$ & empirical reporting rate of exercise $i$, $\bar a_i=n^{-1}\sum_u A_{u,i}$ \\
+$\pi_i$ & true marginal $\Prob[x_{u,i}=1]$ for a randomly drawn student \\
+$\hat\pi_i$ & calibrated (method-of-moments) estimate of $\pi_i$ \\
+$\gamma_u$ & per-student sampling rate of the adaptive variant \\
+$s_{u,i}$ & posterior log-odds score of exercise $i$ for student $u$ \\
+$\mathcal{N}_u$ & candidate set of student $u$ (one positive, $|\mathcal{N}_u|-1$ negatives) \\
+$K$ & truncation depth of the recommendation list ($K=10$ in experiments) \\
+$S$ & symmetrically normalised adjacency with self-loops \\
+$\lambda$ & weight of the public skill graph in the SGC variant \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Local differential privacy}
+
+\begin{definition}[$\eps$-LDP]\label{def:ldp}
+A randomised mechanism $\mathcal{M}$ satisfies $\eps$-local differential privacy if, for any pair of neighbouring local records $x,x'\in\{0,1\}^{m}$ differing in one coordinate and any measurable output $y$ in the range of $\mathcal{M}$,
+\begin{equation}\label{eq:ldp}
+\Prob[\mathcal{M}(x)=y]\le e^{\eps}\,\Prob[\mathcal{M}(x')=y].
+\end{equation}
+\end{definition}
+
+A smaller budget $\eps>0$ enforces stronger indistinguishability. Two composition properties are used below. \emph{Parallel composition} states that mechanisms applied to disjoint subsets of a user's coordinates compose without budget growth. \emph{Post-processing} states that any deterministic or randomised function of a private output remains private with the same budget \cite{dwork2014algorithmic}.
+
+\begin{definition}[Warner randomised response]\label{def:rr}
+For a binary record $x\in\{0,1\}$, Warner RR releases
+\begin{equation}\label{eq:rr}
+a=\begin{cases} x & \text{with probability } p=\dfrac{e^{\eps}}{1+e^{\eps}},\\[2mm] 1-x & \text{with probability } q=\dfrac{1}{1+e^{\eps}}.\end{cases}
+\end{equation}
+\end{definition}
+
+The mechanism satisfies $\eps$-LDP exactly, since $p/q=e^{\eps}$ and $(1-q)/(1-p)=e^{\eps}$ \cite{warner1965rr,dwork2014algorithmic}. Two derived quantities recur: the \emph{signal} $p-q=\tanh(\eps/2)$ and the \emph{noise floor} $q=1/(1+e^{\eps})$. At $\eps=0.02$, $p=0.5050$, $q=0.4950$ and $p-q\approx0.01$: each reported bit carries little more than one per cent of information about the underlying interaction.
+
+\subsection{Simplified graph convolution}
+
+Given an interaction matrix $R$, let $S$ denote the symmetrically normalised adjacency of the student--exercise bipartite graph with self-loops. SGC computes $K$-step smoothed embeddings $Z=S^{K}X$ by iterative sparse--dense multiplication without materialising $S^{K}$ \cite{wu2019sgc}. The cost of one propagation step is $O(\mathrm{nnz}(S)\,d)$ for embedding dimension $d$.
+
+\subsection{Problem formulation}\label{sec:problem}
+
+Let $\mathcal{N}_u\subseteq P$ be the candidate set of student $u$, containing the item to be predicted and a set of negatives. A recommender outputs a ranking $\sigma_u$ of $\mathcal{N}_u$. We write $\HR@K$ and $\NDCG@K$ for the hit rate and normalised discounted cumulative gain at cutoff $K$, defined in Section~\ref{sec:metrics}. The design problem is
+\begin{equation}\label{eq:problem}
+\begin{aligned}
+\max_{\sigma}\;\; & \E_{u}\big[\HR@K(\sigma_u)\big]\\
+\text{s.t.}\;\; & \text{(i) every released record satisfies $\eps$-LDP;}\\
+& \text{(ii) scoring runs on CPU in time } O(|\mathcal{N}_u|).
+\end{aligned}
+\end{equation}
+Condition (ii) excludes iterative graph training at serving time. A secondary goal is to incorporate a public skill taxonomy $G_{\text{skill}}$ when it improves utility; Section~\ref{sec:ablation} shows that on the tested graphs it does not.
+
+\section{Proposed method}\label{sec:method}
+
+\subsection{Overview}
+
+Figure~\ref{fig:framework} summarises the protocol. The client perturbs every interaction bit with Warner RR and uploads only the resulting bit vector. The server performs two operations on the collected report matrix: it estimates each item marginal by the method of moments (Section~\ref{sec:calibration}), and it scores candidate exercises by the posterior log-odds of a true interaction given the report and the estimated marginal (Section~\ref{sec:ranking}). Both server-side operations are functions of the released matrix alone and therefore consume no additional privacy budget (Theorem~\ref{thm:privacy}). Algorithm~\ref{alg:calldpbr} states the protocol and attaches the privacy accounting to each stage.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{fig1_framework.pdf}
+\caption{Overall framework of Cal-LDP-BR. The client perturbs each interaction locally under $\eps$-LDP; the server calibrates item marginals from the released reports and ranks candidates by Bayesian posterior log-odds. Both server steps are post-processing of released data and consume no additional privacy budget (Theorem~\ref{thm:privacy}).}
+\label{fig:framework}
+\end{figure}
+
+Three properties follow from the construction and are made precise in Section~\ref{sec:theory}: (i) calibration recovers a rank-consistent item signal from heavily perturbed reports, because the moment estimator is an affine function of the reported rate; (ii) the ranking score is the Bayes-optimal posterior log-odds under the RR likelihood, so the noise channel is exploited statistically rather than treated as a hard graph edge; and (iii) privacy is guaranteed end-to-end at the client, while all server-side operations are post-processing.
+
+\subsection{Client-side local perturbation}\label{sec:client}
+
+In the primary protocol, each student $u$ applies Warner RR, Eq.~\eqref{eq:rr}, independently to every exercise bit $x_{u,i}$. Because the coordinates are disjoint binary indicators, parallel composition yields exact $\eps$-LDP for the student's full interaction vector:
+\begin{equation}\label{eq:vector}
+\Prob[A_{u}=a\mid x_u]=\prod_{i=1}^{m}\Prob[a_i\mid x_{u,i}],\qquad
+\frac{\Prob[A_u=a\mid x_u]}{\Prob[A_u=a\mid x'_u]}\le e^{\eps}.
+\end{equation}
+We adopt $\eps=0.02$ as the default operating point and evaluate sensitivity across $\eps\in[0.005,2]$ in Section~\ref{sec:sweep}.
+
+As an optional degree-adaptive variant (Section~\ref{sec:adaptive}), the student first releases a Laplace-perturbed degree $\tilde d_u=d_u+\mathrm{Lap}(1/\eps_0)$ under budget $\eps_0$, and sets the sampling rate
+\begin{equation}\label{eq:gamma}
+\gamma_u=\clip\!\left(\left(\frac{d_{\text{ref}}}{\tilde d_u}\right)^{\eta},\gamma_{\min},\gamma_{\max}\right),
+\end{equation}
+where $d_{\text{ref}}$ is a public reference degree and $\eta\in[0,1]$ controls the strength of the adjustment. Coordinates are then sub-sampled with probability $\gamma_u$ before RR, which yields the per-user budget $\ln\!\big(1+\gamma_u(e^{\eps_{\text{int}}}-1)\big)$ by Lemma~\ref{lem:amplification}.
+
+\subsection{Item-wise calibration}\label{sec:calibration}
+
+Let $a_{u,i}\in\{0,1\}$ denote the reported bit for student $u$ and exercise $i$. From the released matrix $A$, the server estimates the true item marginal $\pi_i=\Prob[x_{u,i}=1]$ by the method of moments:
+\begin{equation}\label{eq:pihat}
+\hat\pi_i=\frac{\bar a_i-q}{p-q},\qquad \bar a_i=\frac{1}{n}\sum_{u=1}^{n}a_{u,i},
+\end{equation}
+which is unbiased before clipping, $\E[\hat\pi_i]=\pi_i$ (Theorem~\ref{thm:unbiased}). Because the estimate can leave the probability simplex when $p-q$ is small, it is clipped to a bounded interval:
+\begin{equation}\label{eq:clip}
+\hat\pi_i^{c}=\min\{\max\{\hat\pi_i,\pi_{\min}\},\,0.95\},
+\end{equation}
+with $\pi_{\min}\ge 0$. The upper bound prevents a single high-report item from dominating the prior term, and the lower bound removes negative estimates. The clipped estimator is biased by construction; Proposition~\ref{prop:clipping} bounds the bias. For the adaptive variant, the estimator generalises to the $\gamma_u$-weighted form
+\begin{equation}\label{eq:pihat-adaptive}
+\hat\pi_i=\frac{\sum_u a_{u,i}-q\sum_u\gamma_u}{(p-q)\sum_u\gamma_u},
+\end{equation}
+which reduces to Eq.~\eqref{eq:pihat} when $\gamma_u\equiv1$.
+
+Because $\hat\pi_i$ is computed solely from the published matrix $A$, it constitutes post-processing and consumes zero additional privacy budget. The calibration is also inexpensive: one pass over the reported entries, $O(\mathrm{nnz}(A))$ time and $O(m)$ memory.
+
+\subsection{Bayesian posterior ranking}\label{sec:ranking}
+
+For a candidate exercise $i$, the server observes the student's report $a_{u,i}$ and holds the estimated marginal $\hat\pi_i$. Treating the report as a draw from the RR channel with a Bernoulli prior $\Prob[x_{u,i}=1]=\hat\pi_i$, the posterior log-odds of a true interaction is
+\begin{equation}\label{eq:score}
+s_{u,i}=\begin{cases}
+\log\dfrac{p\,\hat\pi_i}{q\,(1-\hat\pi_i)}, & a_{u,i}=1,\\[3mm]
+\log\dfrac{(1-p)\,\hat\pi_i}{(1-q)\,(1-\hat\pi_i)}, & a_{u,i}=0.
+\end{cases}
+\end{equation}
+Candidates are ranked in descending order of $s_{u,i}$, and the top-$K$ list is returned. The rule is Bayes-optimal for binary relevance under the assumed likelihood (Theorem~\ref{thm:bayes}), and it costs $O(1)$ arithmetic per candidate, i.e.\ $O(|\mathcal{N}_u|)$ per student.
+
+Equation~\eqref{eq:score} has a compact form that drives the analysis of Section~\ref{sec:regimes}. Since $\log(p/q)=\eps$ and $\log\big((1-p)/(1-q)\big)=-\eps$, both branches collapse to
+\begin{equation}\label{eq:decomposition}
+s_{u,i}=\eps\,(2a_{u,i}-1)+\logit(\hat\pi_i),\qquad \logit(\pi)=\log\frac{\pi}{1-\pi}.
+\end{equation}
+The score is therefore the sum of an \emph{evidence} term, which equals $+\eps$ for a reported interaction and $-\eps$ for a reported non-interaction, and an \emph{item-prior} term, which is shared by all students. The relative weight of the two terms is governed by $\eps$ alone, which explains why the utility--budget curve is not monotone (Section~\ref{sec:regimes}).
+
+\subsection{Optional degree-adaptive variant}\label{sec:adaptive}
+
+Sparse students contribute few positive bits and many negative ones, so a uniform reporting rate spends most of the budget on uninformative coordinates. The adaptive variant scales the sampling rate with the privately released degree, Eq.~\eqref{eq:gamma}, so that active students are sub-sampled more aggressively and inactive students report more of their (mostly negative) coordinates. Privacy accounting combines the Laplace mechanism for the degree, sampling amplification for the sub-sampled RR, and sequential composition:
+\begin{equation}\label{eq:budget}
+\eps_{\text{tot}}\le\eps_0+\max_{u}\ln\!\big(1+\gamma_u(e^{\eps_{\text{int}}}-1)\big)\le\eps,
+\end{equation}
+which is verified numerically for every user in our implementation. Algorithm~\ref{alg:adaptive} summarises the variant; Section~\ref{sec:ablation} reports its empirical behaviour.
+
+\subsection{Lightweight SGC variant}\label{sec:sgc}
+
+For comparison we also evaluate a lightweight SGC encoder trained on the calibrated soft posterior graph $R'$, whose entries are the posterior probabilities implied by Eq.~\eqref{eq:score}, mapped to $[0,1]$. Public skill taxonomy edges $G_{\text{skill}}$ connect exercises that share a knowledge point and are fused through the normalised block adjacency
+\begin{equation}\label{eq:blockadj}
+S=\operatorname{norm}\!\left(\begin{bmatrix}0 & R'\\ R'^{\top} & \lambda\,G_{\text{skill}}\end{bmatrix}\right),
+\end{equation}
+with propagation
+\begin{equation}\label{eq:sgc}
+Z=S^{K}X,\qquad K=3,
+\end{equation}
+where $X$ stacks free student and exercise embeddings of dimension $d=64$, and $\lambda=0.3$ weights the skill edges. Each propagation step costs $O(\mathrm{nnz}(S)\,d)$. Section~\ref{sec:ablation} shows that adding SGC and the skill graph degrades accuracy on sparse educational graphs; the direct posterior ranker therefore remains the primary method, and the negative ablation results are retained.
+
+\subsection{Complexity and deployment}\label{sec:complexity}
+
+Table~\ref{tab:complexity} compares the asymptotic costs of the evaluated families. Cal-LDP-BR has no training phase, no parameters, and a per-student scoring cost linear in the candidate set, which makes it suitable for CPU-only serving. The SGC variant adds a precomputable propagation but requires materialising soft edges and a skill graph; the GNN baselines require iterative training over the noisy graph.
+
+\begin{table}[t]
+\caption{Asymptotic cost of the evaluated method families. $n=|U|$, $m=|P|$, $d$ is the embedding dimension, $K$ the propagation depth, $T$ the number of training epochs, and $\mathrm{nnz}(\cdot)$ the number of non-zeros. Costs are per epoch for trained models and per scoring pass for Cal-LDP-BR.}
+\label{tab:complexity}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Method & Training & Inference / student & Parameters & Extra budget \\
+\midrule
+Cal-LDP-BR & none & $O(|\mathcal{N}_u|)$ & $0$ & none \\
+Adaptive-LDP-SGC-LP & $O(TK\,\mathrm{nnz}(S)d)$ & $O(K\,\mathrm{nnz}(S_{\cdot,u})d)$ & $(n+m)d$ & $\eps_0$ \\
+LDP-GCN, LDP-RR-Light & $O(T\,\mathrm{nnz}(A)d)$ & $O(\mathrm{nnz}(A_{\cdot,u})d)$ & $(n+m)d$ & none \\
+GCN-LP, LightGCN-LP & $O(T\,\mathrm{nnz}(R)d)$ & $O(\mathrm{nnz}(R_{\cdot,u})d)$ & $(n+m)d$ & not private \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{algorithm}[t]
+\caption{Cal-LDP-BR: client--server protocol with privacy accounting.}\label{alg:calldpbr}
+\begin{algorithmic}[1]
+\Require interaction vectors $\{x_u\}_{u\in U}$, budget $\eps$, clip bounds $\pi_{\min}$, $\pi_{\max}=0.95$, cutoff $K$
+\Statex \textbf{Client side} (executed on device; one pass)
+\For{each student $u$ and exercise $i$}
+  \State draw $a_{u,i}\gets x_{u,i}$ with probability $p=e^{\eps}/(1+e^{\eps})$, else $1-x_{u,i}$ \Comment{Eq.~\eqref{eq:rr}}
+\EndFor
+\State upload $a_u\in\{0,1\}^m$ only \Comment{$\eps$-LDP by parallel composition, Theorem~\ref{thm:privacy}}
+\Statex \textbf{Server side} (post-processing; no budget)
+\State form the report matrix $A=[a_1,\dots,a_n]^{\top}$
+\For{each exercise $i$}
+  \State $\bar a_i\gets n^{-1}\sum_u a_{u,i}$; \quad $\hat\pi_i\gets(\bar a_i-q)/(p-q)$ \Comment{Eq.~\eqref{eq:pihat}}
+  \State $\hat\pi_i^{c}\gets\min\{\max\{\hat\pi_i,\pi_{\min}\},\pi_{\max}\}$ \Comment{Eq.~\eqref{eq:clip}}
+\EndFor
+\For{each student $u$}
+  \For{each candidate $i\in\mathcal{N}_u$}
+    \State $s_{u,i}\gets \eps(2a_{u,i}-1)+\logit(\hat\pi_i^{c})$ \Comment{Eqs.~\eqref{eq:score}, \eqref{eq:decomposition}}
+  \EndFor
+  \State return the $K$ candidates with largest $s_{u,i}$
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[t]
+\caption{Degree-adaptive sampling-amplified variant (optional).}\label{alg:adaptive}
+\begin{algorithmic}[1]
+\Require budget $\eps$, split $\eps_0+\eps_{\text{int}}=\eps$, reference degree $d_{\text{ref}}$, exponent $\eta$, bounds $\gamma_{\min},\gamma_{\max}$
+\Statex \textbf{Client side}
+\State $d_u\gets\sum_i x_{u,i}$;\quad $\tilde d_u\gets d_u+\mathrm{Lap}(1/\eps_0)$ \Comment{$\eps_0$-DP}
+\State $\gamma_u\gets\clip((d_{\text{ref}}/\tilde d_u)^{\eta},\gamma_{\min},\gamma_{\max})$ \Comment{Eq.~\eqref{eq:gamma}}
+\For{each exercise $i$}
+  \State sample $b_i\sim\mathrm{Bernoulli}(\gamma_u)$; \State if $b_i=1$ release $a_{u,i}\sim\mathrm{RR}_{\eps_{\text{int}}}(x_{u,i})$, else release nothing
+\EndFor
+\Statex \textbf{Server side}
+\State estimate $\hat\pi_i$ by Eq.~\eqref{eq:pihat-adaptive} using the observed $\gamma_u$
+\State rank by Eq.~\eqref{eq:score} with the effective probabilities $\gamma_u p$ and $\gamma_u q$
+\end{algorithmic}
+\end{algorithm}

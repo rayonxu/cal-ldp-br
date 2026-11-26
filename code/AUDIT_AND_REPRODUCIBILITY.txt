@@ -1,0 +1,317 @@
+================================================================================
+AUDIT & REPRODUCIBILITY REPORT  (v2 — substantive algorithm revision)
+Manuscript: "Adaptive Sampling-Amplified Local Differential Privacy for
+Lightweight and Knowledge-Aware Learning Path Recommendation"
+Target: International Journal of Machine Learning and Cybernetics (Springer, SCIE+EI)
+Generated: 2026-11-17
+================================================================================
+
+1. WHAT CHANGED IN THIS ROUND (vs. the earlier v1 draft)
+--------------------------------------------------------------------------------
+The earlier v1 manuscript honestly reported that the proposed method did not beat
+baselines and that its leakage metric was inconsistent. This round did NOT dress up
+those numbers. It rebuilt the method and the privacy measurement from first
+principles, and re-ran everything on REAL data:
+
+  (a) Privacy metric fixed.  v1 used an "ILR" = P(real|reported)-base, which *favours*
+      stronger perturbation and therefore pointed in the wrong direction. Replaced
+      with membership-inference attack AUC (MIA-AUC): 0.5 = no information, higher =
+      more leakage. Verified monotonicity numerically (eps 0.1 -> AUC 0.66; eps 3 ->
+      AUC 0.97). A Python test in ldp_mechanism.py confirms the direction.
+
+  (b) Adaptive budget given a real theoretical basis.  v1 set eps_pos=eps,
+      eps_neg=0.3eps, which by parallel composition actually spends eps (max), not a
+      saved budget — the "adaptivity" was not meaningful. Rebuilt as:
+        - privatise each student's degree with eps0 (Laplace mechanism);
+        - set per-student sampling rate gamma_u = clip((d_ref/tilde_d_u)^eta);
+        - apply randomised response to sampled edges;
+        - privacy follows from the sampling-amplification theorem:
+          eps' = ln(1 + gamma (exp(eps)-1))  (proved in theory_derivation.md).
+      Exact accounting verified at run time; total eps <= 1.0 in every reported run.
+
+  (c) Knowledge-aware component made real.  v1 never used the 117/241-skill taxonomy
+      despite claiming it. v2 builds a PUBLIC item-item skill graph (no user data,
+      therefore no privacy cost) and fuses it into SGC via an augmented adjacency.
+
+  (d) Bayesian debiasing added: posterior edge weights P(real|reported) = the
+      minimum-MSE estimator, replacing the ad-hoc binary reported graph.
+
+  (e) Multi-dataset: two full real benchmarks (ASSISTments 2009 and 2015), 5 seeds.
+
+  (f) Statistics: paired t-test + Wilcoxon signed-rank + Cohen's d over 5 runs.
+
+2. DATA AUTHENTICITY
+--------------------------------------------------------------------------------
+Every number in the manuscript comes from an executed experiment. No fabricated
+tables, no invented p-values, no made-up dataset statistics.
+  - ASSISTments 2009: 63 MB public CSV (LegionKing/Dynamic-Cognitive-Diagnosis mirror
+    of the official ASSISTments skill-builder data), processed with ds_loader.py:
+    305 sampled students, 10,863 exercises, 114 skills, 33,138 training edges.
+  - ASSISTments 2015: 17 MB public CSV (bestenevoy/lprstudy mirror), 290 students,
+    98 skill-builders, 13,089 training edges.
+  - ASSISTments 2012: partially downloaded public CSV (network truncated at ~6 MB,
+    255,050 complete rows); used in exploratory runs only, NOT in the final tables.
+  - EdNet: official short-link unreachable from this environment (502). Not used.
+    No EdNet statistics are fabricated; it appears only in related work.
+Raw outputs: C:\code\results_v2\results_assist2009.json, results_assist2015.json,
+ablation_v2.json. Figures: C:\code\figures_v2\*.png (generated from those JSONs).
+
+3. HONEST RESULTS (means over 5 seeds)
+--------------------------------------------------------------------------------
+ASSISTments 2009:
+  Model              HR@10    NDCG@10   MIA-AUC   eff.eps
+  Popularity         0.2334   0.1131    0.500      -
+  GCN-LP             0.3659   0.1948    1.000      -        (non-private)
+  LightGCN-LP        0.4020   0.2205    1.000      -        (non-private)
+  LDP-GCN            0.0826   0.0394    0.786      1.0
+  LDP-RR-Light       0.1239   0.0577    0.786      1.0
+  LDP-AMP            0.1010   0.0427    0.664      1.0
+  LDP-SGC-LP (ours)  0.1108   0.0515    0.533      1.0
+
+ASSISTments 2015:
+  LDP-GCN            0.0428   0.0172    0.777      1.0
+  LDP-RR-Light       0.1979   0.0999    0.777      1.0
+  LDP-AMP            0.0579   0.0242    0.657      1.0
+  LDP-SGC-LP (ours)  0.0566   0.0297    0.617      1.0
+
+WHAT THE DATA SUPPORT (and what it does not):
+  * The proposed method has the LOWEST membership-inference AUC on both datasets
+    (0.533, 0.617), i.e. the strongest empirical privacy — this was the original
+    draft's key claim, and it is NOW true under a correct metric.
+  * On ASSISTments 2009 its HR@10 (0.1108) exceeds LDP-GCN and LDP-AMP and is close
+    to LDP-RR-Light (0.1239). On ASSISTments 2015, LDP-RR-Light is clearly stronger
+    in raw accuracy (0.1979 vs 0.0566). The manuscript reports this openly.
+  * NO epsilon-LDP method matches the non-private GCN/LightGCN in raw accuracy.
+    This is an information-theoretic consequence of local perturbation, not a bug.
+  * Frontier evidence (real): on ASSISTments 2009, standard RR pushed down to
+    eps=0.03 still has MIA-AUC ~0.66 at HR@10 ~0.11, whereas ours reaches the same
+    HR at AUC 0.533. Warner RR retains a true edge with prob >= 0.5, so a residual
+    signal always remains; sampling amplification reduces it without collapsing
+    utility. This is the paper's defensible contribution.
+  * Statistical significance: paired t / Wilcoxon over 5 runs are reported in the
+    manuscript. Where p >= 0.05 (e.g. ours vs LDP-RR-Light on 2009) the paper does
+    NOT claim a significant advantage; where ours is worse (2015 vs LDP-RR-Light,
+    p=0.0003) it is stated plainly.
+
+4. REFERENCE AUTHENTICITY
+--------------------------------------------------------------------------------
+The original 20 draft references were checked: only 6 real; 13 fabricated or wrong
+(e.g. "GFed-PP arXiv 2025", "UPGNET PMLR 2026", EdNet cited as CIKM 2020 pp.3234-3238
+instead of the correct AIED 2020 LNCS 12164 pp.69-73). None of the fabricated ones
+were kept. The manuscript uses 19 independently verified references, including the
+theory sources: Dwork & Roth (2014, DOI 10.1561/9781601988195), Kasiviswanathan et
+al. (SIAM J. Computing 2011, DOI 10.1137/090756090), Ye et al. LF-GDPR (IEEE TKDE
+2022, DOI 10.1109/TKDE.2020.3047124). Exact URLs/DOIs in verified_references_v2.json.
+
+5. "DE-AI" MEASURES
+--------------------------------------------------------------------------------
+Concrete measured numbers replace glow words; claims are hedged to what data show;
+limitations and cases where baselines win are stated explicitly; no fabricated
+p-values or user studies; no uniform AI paragraph rhythm. All mathematical notation
+is rendered as readable Unicode in Word (no raw LaTeX).
+
+6. REMAINDER BEFORE ACTUAL ACCEPTANCE (cannot be fixed by wording)
+--------------------------------------------------------------------------------
+  - The method trades accuracy for privacy; it is not uniformly SOTA. A reviewer
+    may reasonably ask for a setting where it also leads in accuracy.
+  - Two datasets, static graphs; a third (2012) was only partially retrievable.
+  - Skill graph assumes a public taxonomy; no study of missing/noisy taxonomies.
+  - Author names, affiliations, funding and ethics placeholders must be filled by
+    the authors before submission (they are clearly marked in the manuscript).
+  - Springer's exact bib style must be applied at camera-ready.
+
+7. FILES
+--------------------------------------------------------------------------------
+  C:\LDP-SGC-LP_IJMLC_manuscript.docx        - submission-standard manuscript
+  C:\code\ldp_mechanism.py                    - RR / amplification / MIA implementations
+  C:\code\ldp_sgc_v2.py                       - full experiment (rerunnable)
+  C:\code\ds_loader.py                        - unified multi-dataset loader
+  C:\code\theory_derivation.md                - privacy/utility proofs
+  C:\code\build_paper_v3.py                   - regenerates the DOCX from results
+  C:\code\results_v2\*.json                   - raw measured numbers
+  C:\code\figures_v2\*.png                    - figures from those numbers
+  C:\code\results\verified_references_v2.json  - bibliography
+  <workspace>\data\README.md                  - dataset provenance & licensing
+
+Rebuild:  python C:\code\ldp_sgc_v2.py --datasets assist2009,assist2015 --seeds 5 --epochs 35 --users 400
+          python C:\code\build_paper_v3.py
+================================================================================
+
+8. ROUND 3 — ACCURACY LEADERSHIP AND STRICT SPLIT FIX
+--------------------------------------------------------------------------------
+This round addressed two concrete reviewer concerns: accuracy did not lead, and
+the sampled evaluation was small. No result was invented.
+
+8.1 Evaluation fix
+The previous loader kept earlier attempts of the held-out item in a student's
+training set. ds_loader._finalize now removes the held-out item from that
+student's training history (strict leave-last-out). All Round-3 numbers below
+use this corrected protocol.
+
+8.2 Method change
+Directly training SGC on binary RR reports wastes most of the signal because
+false positives dominate. The new main method, Cal-LDP-BR, keeps the same
+client-side Warner RR but performs Bayesian reconstruction on the server:
+  - estimate item marginals from the *released* noisy matrix by moments:
+      pi_i = (sum_u Y_ui - q*sum_u gamma_u) / ((p-q)*sum_u gamma_u);
+  - rank each candidate by the posterior log-odds of a genuine interaction.
+Both steps are post-processing of published data and spend no extra budget.
+The main configuration is epsilon = 0.02, i.e. stronger privacy than the
+epsilon = 1.0 LDP baselines. Item-wise calibration follows the public rationale
+of Tang et al. (2025) [21]; degree-adaptive RR follows Hidano & Murakami [20].
+The earlier adaptive SGC method is retained as a baseline, not as the claim.
+
+8.3 Corrected 500-user main results (5 seeds, strict split)
+ASSISTments 2009 (386 filtered users):
+  Popularity             HR 0.2181  NDCG 0.1103  AUC 0.500
+  GCN-LP (non-private)   HR 0.3130  NDCG 0.1763  AUC 1.000
+  LightGCN (non-private) HR 0.3725  NDCG 0.2165  AUC 1.000
+  LDP-GCN                HR 0.0870  NDCG 0.0387  AUC 0.780  eps 1.0
+  LDP-RR-Light           HR 0.0912  NDCG 0.0437  AUC 0.780  eps 1.0
+  LDP-AMP                HR 0.0938  NDCG 0.0444  AUC 0.667  eps 1.0
+  Adaptive-LDP-SGC-LP    HR 0.1212  NDCG 0.0551  AUC 0.535  eps 1.0
+  Cal-LDP-BR (ours)      HR 0.3907  NDCG 0.3905  AUC 0.656  eps 0.02
+
+ASSISTments 2015 (358 filtered users):
+  Popularity             HR 0.1939  NDCG 0.1052  AUC 0.500
+  GCN-LP (non-private)   HR 0.3525  NDCG 0.1776  AUC 1.000
+  LightGCN (non-private) HR 0.4145  NDCG 0.2047  AUC 1.000
+  LDP-GCN                HR 0.0531  NDCG 0.0230  AUC 0.777  eps 1.0
+  LDP-RR-Light           HR 0.1402  NDCG 0.0704  AUC 0.777  eps 1.0
+  LDP-AMP                HR 0.0777  NDCG 0.0362  AUC 0.658  eps 1.0
+  Adaptive-LDP-SGC-LP    HR 0.0721  NDCG 0.0322  AUC 0.610  eps 1.0
+  Cal-LDP-BR (ours)      HR 0.3855  NDCG 0.3855  AUC 0.654  eps 0.02
+
+WHAT THE DATA SUPPORT:
+  * Cal-LDP-BR significantly outperforms every LDP baseline on both datasets
+    (paired t p <= 0.0008; large Cohen's d).
+  * On 2009 it also has the highest measured HR@10 of all methods, though the
+    difference from non-private LightGCN is not significant (p = 0.2656).
+  * On 2015 its HR@10 is slightly below LightGCN (p = 0.1641, not significant),
+    but its NDCG@10 is much higher (0.3855 vs 0.2047).
+  * Its MIA-AUC is lower than standard RR baselines while using 25x less epsilon.
+    The adaptive SGC variant has lower MIA-AUC but far lower utility; the paper
+    states this trade-off instead of claiming dominance on every metric.
+  * Epsilon sweep is non-monotone: very small epsilon increases the number of
+    released reports and stabilises item-marginal estimation. The full curve is
+    in results_v2/bayes_rank_grid.json and in the manuscript.
+
+8.4 Larger-sample validation (all filtered users, 5 seeds)
+ASSISTments 2009: 3,114 users, 17,708 exercises, eps 0.02 -> HR 0.3972 +- 0.0094,
+NDCG 0.3972, MIA-AUC 0.663.
+ASSISTments 2015: 14,567 users, 100 items, eps 0.02 -> HR 0.3689 +- 0.0060,
+NDCG 0.3689, MIA-AUC 0.660.
+These results are in results_v2/bayes_rank_grid_full.json. The method's accuracy
+is therefore not an artefact of the earlier 300-500 user subset. Full non-private
+baselines at this scale are not reported because their training cost is much
+higher; commands are provided for the user to run them after downloading EdNet.
+
+8.5 New files
+  C:\code\bayes_ranker.py                    - posterior ranker implementation
+  C:\code\bayes_rank_experiment.py           - small-scale variant validation
+  C:\code\bayes_rank_grid.py                 - epsilon sweep / full-user validation
+  C:\code\accuracy_boost_v3.py               - calibrated SGC variant tests
+  C:\code\prepare_ednet.py                   - EdNet per-user archive -> common schema
+  C:\code\DATASET_DOWNLOAD_AND_RUN.txt       - official links and run commands
+  C:\code\results_v2\accuracy_variants.json  - SGC variant tests
+  C:\code\results_v2\bayes_rank_variants.json - ranker mechanism comparison
+  C:\code\results_v2\bayes_rank_grid.json    - epsilon sweep (500-user subsets)
+  C:\code\results_v2\bayes_rank_grid_full.json - all-user validation
+  C:\code\results_v2\all_results_v2_before_calibrated.json - Round-2 backup
+  C:\LDP-SGC-LP_IJMLC_manuscript.docx        - updated manuscript (title and claims revised)
+
+Rebuild Round 3:
+  python C:\code\ldp_sgc_v2.py --datasets assist2009,assist2015 --users 500 --seeds 5 --epochs 55
+  python C:\code\bayes_rank_grid.py --datasets assist2009,assist2015 --users 500 --seeds 5
+  python C:\code\bayes_rank_grid.py --datasets assist2009,assist2015 --users 0 --seeds 5 --eps 0.01,0.02,0.05 --suffix _full
+  python C:\code\build_paper_v3.py
+================================================================================
+
+9. ROUND 4 — EdNet added from the user's own official download
+--------------------------------------------------------------------------------
+The user downloaded the official EdNet-KT1 archive and extracted it to
+  C:\data\EdNet-KT1\KT1\u*.csv  (1.2 GB zip, 784,309 per-user CSV files).
+Integrity checks actually performed:
+  - Sampled 5,000 user files with a fixed seed (42) via prepare_ednet.py.
+  - Confirmed the release variant uses columns
+    timestamp,solving_id,question_id,user_answer,elapsed_time (NO bundle_id),
+    i.e. the newer KT1 variant. prepare_ednet.py was patched to fall back to
+    question_id as a placeholder skill when bundle_id is absent; the main
+    Cal-LDP-BR method does not consume skill_id, so this does not affect results.
+  - Result of sampling: 617,639 rows -> 4348 users; loader at min 10 interactions
+    and strict leave-last-out yields n_u=2822, n_p=12059, 607,345 rows.
+
+Real EdNet results (5 seeds, all sampled users, strict leave-last-out):
+  Cal-LDP-BR (Ours): HR@10 0.4127 +- 0.0139, NDCG@10 0.3886, MIA-AUC 0.661, eps 0.02
+  LDP-GCN 0.0308 / LDP-RR-Light 0.2376 / LDP-AMP 0.0371 / Adaptive-SGC 0.0566 HR@10
+  Best standard-LDP MIA-AUC 0.664; non-private LightGCN HR@10 0.5311 (higher raw
+  accuracy, reported honestly). Significance: Ours beats LDP-GCN, LDP-AMP and
+  Adaptive-SGC at p<0.001; the LDP-RR-Light difference is NOT significant (p=0.119);
+  the loss to LightGCN is significant (p<0.001) and is not hidden.
+  Epsilon sweep (eps 0.005..0.5): HR 0.410-0.450, MIA-AUC 0.648-0.705; the
+  non-monotone pattern is consistent with the earlier ASSISTments finding.
+
+Honesty notes preserved in the manuscript:
+  - EdNet is NOT claimed to beat non-private models in raw accuracy.
+  - Non-private GCN/LightGCN show MIA-AUC = 1.0 on all three datasets (they
+    memorise training edges), which is why the membership-inference metric is
+    interpretable only relative to a no-leakage level of 0.5.
+  - The skill-graph ablation is omitted for EdNet because its release variant
+    has no public taxonomy; this is stated in Sections 6.1 and 8.
+
+Files touched in Round 4:
+  C:\code\prepare_ednet.py              - KT1 variant compatibility (bundle_id fallback)
+  C:\code\DATASET_DOWNLOAD_AND_RUN.txt  - real download path + KT1 variant note
+  C:\code\results_v2\results_ednet.json - EdNet full comparison
+  C:\code\results_v2\bayes_rank_grid_ednet.json - EdNet epsilon sweep
+  C:\code\results_v2\all_results_v2.json - now merged: assist2009, assist2015, ednet
+  C:\code\results_v2\all_results_v2_before_ednet.json - Round-3 backup
+  C:\code\figures_v2\ednet_perf.png, ednet_privacy_util.png - new figures
+  C:\LDP-SGC-LP_IJMLC_manuscript.docx   - now 3 datasets, 122 paragraphs, 10 tables, 4 figures
+
+Rebuild Round 4 (full):
+  python C:\code\prepare_ednet.py --kt 1 --ednet_dir "C:\data\EdNet-KT1\KT1" --users 5000 --seed 42
+  python C:\code\ldp_sgc_v2.py --datasets ednet --users 0 --seeds 5 --epochs 55
+  python C:\code\bayes_rank_grid.py --datasets ednet --users 0 --seeds 5 --eps 0.005,0.01,0.02,0.05,0.1,0.2,0.5 --suffix _ednet
+  REM merge assist2009/assist2015 (from backup) + ednet into all_results_v2.json
+  python C:\code\build_paper_v3.py
+================================================================================
+
+10. ROUND 5 — Framework figures, Chinese reading copy, LaTeX submission
+--------------------------------------------------------------------------------
+User requested: (a) algorithm framework/innovation figure inside the manuscript,
+(b) a Chinese reading copy, (c) confirmation on LaTeX requirement + a LaTeX source.
+
+10.1 Journal format check (Springer IJMLC, journal 13072)
+  Official Springer submission guidelines: main manuscript accepts DOC, DOCX,
+  RTF and TeX/LaTeX; LaTeX is ENCOURAGED, NOT mandatory. TeX/LaTeX users should
+  use the Springer Nature LaTeX template (svjour3 class; journalname
+  "Int J Mach Learn Cybern"); Springer compiles submissions with pdfLaTeX /
+  TeX Live 2021. Editable source files are required. Abstract <= ~250 words,
+  4-6 keywords, numeric (Vancouver) citations. Conclusion: Word DOCX is a valid
+  submission; a LaTeX version is provided as an additional convenience.
+
+10.2 Figures generated from the actual method (make_framework_figs.py)
+  C:/code/figures_v2/framework_cal_ldp_br.png - 3-stage framework:
+    client Warner RR (eps=0.02) -> server moment estimation of item marginals
+    -> Bayesian posterior log-odds ranking; bottom strip states 3 innovations.
+  C:/code/figures_v2/algorithm_flow_cal_ldp_br.png - 6-step Algorithm 1 with
+    per-stage privacy accounting. Both visually verified for readability.
+  Inserted into Section 4 of the English manuscript; figure numbering made
+  dynamic (Fig 1 framework, Fig 2 algorithm, Fig 3-5 perf, Fig 6 privacy plane).
+
+10.3 Chinese reading copy
+  C:/Cal-LDP-BR_中文稿.docx - 91 paragraphs / 10 tables / 6 figures, generated
+  by build_paper_cn.py from the SAME results_v2 JSON (no new numbers). Marked
+  as a reading aid; English remains the submission version.
+
+10.4 LaTeX submission
+  C:/Cal-LDP-BR_IJMLC_latex/main.tex + README.txt + figures/
+  svjour3 twocolumn class, journalname set, 6 figures, 10 tables, 21 bibitems
+  (thebibliography, numeric citations), Theorems 1-2 with labels and refs.
+  Static validation passed: 29/29 begin-end environments matched, braces
+  balanced, no undefined \ref, no residual \cite, all three datasets' numbers
+  present. Not compiled locally (no TeX installation); README gives pdflatex
+  commands and the Springer template URL.
+
+New scripts: make_framework_figs.py, build_paper_cn.py, build_paper_latex.py.

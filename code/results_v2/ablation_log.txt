@@ -1,0 +1,10 @@
+dataset 190 7500
+  Full LDP-SGC-LP                    HR=0.1105 NDCG=0.0514 AUC=0.547
+  w/o public skill graph             HR=0.1395 NDCG=0.0702 AUC=0.547
+  w/o posterior reweighting          HR=0.1079 NDCG=0.0507 AUC=0.547
+  w/o adaptive (uniform sampling)    HR=0.0921 NDCG=0.0404 AUC=0.657
+  eps=0.3: HR=0.1289 NDCG=0.0596 AUC=0.469
+  eps=0.5: HR=0.1289 NDCG=0.0585 AUC=0.502
+  eps=1.0: HR=0.1105 NDCG=0.0514 AUC=0.547
+  eps=2.0: HR=0.1421 NDCG=0.0644 AUC=0.634
+SAVED ablation_v2.json

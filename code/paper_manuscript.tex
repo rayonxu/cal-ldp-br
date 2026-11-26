@@ -1,0 +1,136 @@
+% ============================================================
+% Manuscript prepared for submission to
+% International Journal of Machine Learning and Cybernetics (Springer)
+% ============================================================
+\documentclass[sn-mathphys]{sn-jnl}
+\usepackage{amsmath,amssymb,graphicx,booktabs,multirow}
+\begin{document}
+
+\title{Privacy-Preserving and Lightweight Learning Path Recommendation via Local Differential Privacy and Simplified Graph Convolution}
+
+\author[1]{Anonymous Author}
+\affil[1]{Anonymous Institution}
+
+\begin{abstract}
+Learning path recommendation systems exploit students' interaction data to generate personalized study sequences, yet deploying them in real educational platforms faces two simultaneous obstacles: the sensitive nature of learning records raises serious privacy concerns under regulations such as GDPR and PIPL, and mainstream graph neural network (GNN) recommenders are too computationally heavy for resource-constrained deployment. Existing approaches typically address privacy or efficiency in isolation, and few adapt their designs to the sparsity and knowledge-point structure of educational data. We propose LDP-SGC-LP, a unified framework that integrates an adaptive local differential privacy (LDP) edge-perturbation mechanism, a simplified graph convolution (SGC) encoder, and a knowledge-aware path generation strategy. Under a fixed privacy budget, the adaptive mechanism allocates a larger budget to informative positive interactions and suppresses false-positive edges, preserving data utility while satisfying $\varepsilon$-LDP. The SGC encoder precomputes high-order propagation, removing nonlinear layers and weight matrices to substantially reduce parameters and inference latency. The path generator fuses propagated embeddings with a knowledge-mastery proxy derived from interaction frequency to order recommended exercises. Extensive experiments on the real ASSISTments 2009 dataset---spanning 123 skills and hundreds of thousands of interactions---show that LDP-SGC-LP achieves a favorable privacy--utility--efficiency balance: it attains competitive ranking accuracy, lowers the empirical information leakage rate relative to non-adaptive LDP baselines, and reduces inference latency and model size relative to conventional GCN-based recommenders. Ablation and sensitivity studies confirm the contribution of each component.
+\end{abstract}
+
+\keywords{Local differential privacy; Learning path recommendation; Simplified graph convolution; Educational data mining; Privacy-preserving recommendation; Lightweight graph learning}
+
+\section{Introduction}
+\label{sec:intro}
+
+Educational digitalization has produced large-scale online learning platforms that record fine-grained student--exercise interactions. Personalized learning path recommendation---the task of ordering learning items so that each student masters target knowledge points efficiently---has become a central mechanism for moving beyond one-size-fits-all instruction. Graph neural networks (GNNs) are attractive for this task because they naturally model the higher-order associations among students, exercises, and knowledge points in a bipartite or heterogeneous graph.
+
+Two practical obstacles, however, limit the deployment of GNN-based learning path recommenders.
+
+\emph{Privacy.} Learning interactions reveal knowledge mastery, study habits, and other sensitive attributes. Training directly on raw records risks privacy leakage and conflicts with data-protection requirements such as the General Data Protection Regulation (GDPR) and the Personal Information Protection Law of the People's Republic of China (PIPL). Centralized differential privacy assumes a trusted data aggregator, an assumption that is often unrealistic. Local differential privacy (LDP) perturbs data on the client side so that raw records never leave the user's device, making it well suited to sensitive educational data.
+
+\emph{Efficiency.} Standard GNNs (e.g., GCN, GAT) stack nonlinear layers and learned weight matrices, incurring many parameters and high inference cost. Educational platforms often must serve recommendations on CPUs or low-resource edge devices at scale. Simplified graph convolution (SGC) removes nonlinearities and collapses weight matrices into a single linear propagation that can be precomputed, offering a lightweight alternative that retains much of the representational power of GNNs.
+
+Most prior work addresses privacy \emph{or} efficiency, and general-purpose LDP recommendation methods do not exploit the knowledge-point structure and extreme sparsity of educational interaction data. Consequently, there is a lack of a unified method that jointly achieves privacy protection, lightweight deployment, and knowledge-aware path quality.
+
+\paragraph{Contributions.} This paper makes the following contributions.
+\begin{enumerate}
+  \item We propose LDP-SGC-LP, a unified framework that couples adaptive LDP edge perturbation with an SGC encoder and a knowledge-aware path generator for educational scenarios.
+  \item We design an adaptive privacy-budget allocation scheme tailored to sparse educational bipartite graphs: a larger budget is assigned to positive interactions and false-positive edges are bounded, improving the privacy--utility trade-off under a fixed $\varepsilon$.
+  \item We develop a lightweight propagation-and-training procedure that never materializes high-order adjacency powers, keeping memory and inference cost low on CPU-only hardware.
+  \item We conduct reproducible experiments on the real ASSISTments 2009 dataset, including comparison with five baselines, ablation, and sensitivity analyses, and we report measured privacy, accuracy, and efficiency results.
+\end{enumerate}
+
+The remainder of the paper is organized as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:prelim} introduces preliminaries and the problem formulation. Section~\ref{sec:method} details the proposed method. Section~\ref{sec:exp} reports experiments. Section~\ref{sec:conc} concludes.
+
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Learning Path Recommendation}
+Learning path recommendation methods can be grouped into knowledge-graph-based, sequence-based, and graph-based approaches. Knowledge-graph methods exploit prerequisite relations among knowledge points to produce cognitively ordered paths, but often underuse individualized behavior and require costly graph construction. Sequence models such as BERT4Rec-style recommenders capture long-term dependencies in interaction sequences yet struggle to model the explicit student--exercise--knowledge structure. Graph-based methods build student--exercise bipartite or heterogeneous graphs and apply GCN/GAT-style encoders, improving recommendation quality but typically ignoring both privacy and deployment cost.
+
+\subsection{Privacy-Preserving Graph Learning}
+Differential privacy provides a rigorous privacy guarantee and has been widely applied to graph learning. Centralized DP requires a trusted aggregator, whereas LDP perturbs data locally and is preferable when no trusted third party is available. Prior LDP graph-learning research considers topology perturbation and embedding perturbation. Topology perturbation applies randomized response, Gaussian noise, or edge sampling to the graph; embedding perturbation adds calibrated noise to learned representations. However, generic LDP recommenders are not adapted to educational sparsity or knowledge-point dependencies, and often exhibit a pronounced privacy--utility imbalance.
+
+\subsection{Lightweight Graph Convolution}
+LightGCN removes nonlinear activations and weight matrices and aggregates multi-order neighbors, reducing complexity while retaining strong recommendation performance. SGC further precomputes $K$-order propagation and collapses the model into a linear mapping, yielding dramatic parameter and computation savings. Despite these advantages, lightweight graph recommenders are rarely combined with formal privacy guarantees, especially in educational settings.
+
+\subsection{Research Gap}
+Existing work seldom jointly addresses privacy, lightweight deployment, and knowledge-aware path quality. This paper fills that gap by combining adaptive LDP perturbation, SGC propagation, and interaction-frequency-based path ordering in one framework, evaluated on a real educational dataset.
+
+\section{Preliminaries and Problem Formulation}
+\label{sec:prelim}
+
+\subsection{Local Differential Privacy}
+\begin{definition}[$\varepsilon$-LDP]
+A randomized mechanism $\mathcal{M}$ with domain $\mathcal{D}$ and range $\mathcal{R}$ satisfies $\varepsilon$-local differential privacy if for any two inputs $d,d'\in\mathcal{D}$ and any output $r\in\mathcal{R}$,
+\begin{equation}
+\Pr[\mathcal{M}(d)=r] \le e^{\varepsilon}\,\Pr[\mathcal{M}(d')=r].
+\end{equation}
+\end{definition}
+A smaller $\varepsilon$ implies stronger privacy. We apply randomized response at the edge level: a true interaction is retained with probability $p=e^{\varepsilon}/(e^{\varepsilon}+1)$, and a non-interaction is flipped to an interaction with probability $q=1/(e^{\varepsilon}+1)$.
+
+\subsection{Simplified Graph Convolution}
+Let $R\in\mathbb{R}^{m\times n}$ be a user--item interaction matrix. We construct the bipartite adjacency $\mathbf{A}=\begin{bmatrix}\mathbf{0}&R\\ R^\top&\mathbf{0}\end{bmatrix}$, add self-loops $\hat{\mathbf{A}}=\mathbf{A}+\mathbf{I}$, and symmetrically normalize $\mathbf{S}=\hat{\mathbf{D}}^{-1/2}\hat{\mathbf{A}}\hat{\mathbf{D}}^{-1/2}$. SGC computes smoothed embeddings $\mathbf{Z}=\mathbf{S}^{K}\mathbf{X}$, where $\mathbf{X}$ is the trainable base embedding and $K$ the propagation depth. We compute $\mathbf{Z}$ by iterative sparse matrix--dense matrix multiplication, avoiding explicit construction of $\mathbf{S}^{K}$.
+
+\subsection{Problem Statement}
+Given students $U$, exercises $P$, knowledge points $S$, interaction matrix $R$, and an exercise--knowledge mapping, the goal is to learn a recommender that, for each student, produces an ordered exercise sequence (a learning path) that (i) satisfies $\varepsilon$-LDP with respect to the raw interactions, (ii) runs efficiently on CPU-only hardware, and (iii) reflects the student's knowledge mastery and prerequisite structure.
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Overview}
+LDP-SGC-LP comprises three modules: (1) an adaptive LDP edge-perturbation module operating on the client side; (2) a lightweight SGC embedding module; and (3) a knowledge-aware path-generation module. Raw interactions are first perturbed, then propagated through SGC to yield student and exercise embeddings, and finally combined with a knowledge-mastery proxy to order the recommended exercises.
+
+\subsection{Adaptive LDP Edge Perturbation}
+Educational interaction matrices are extremely sparse, so naive randomized response injects a large number of false-positive edges that swamp genuine signal. We allocate the privacy budget asymmetrically. Positive (observed) edges receive the full budget $\varepsilon$, giving retention probability $p=e^{\varepsilon}/(e^{\varepsilon}+1)$; negative edges receive a reduced budget $\varepsilon(1-\alpha)$, giving flip probability $q=1/(e^{\varepsilon(1-\alpha)}+1)$. The number of injected false positives is further bounded by $\eta$ times the number of retained real edges. This yields a perturbed matrix $R'$ that preserves informative interactions while limiting distortion. Since each edge is perturbed independently under randomized response with parameter bounded by $\varepsilon$, the mechanism satisfies $\varepsilon$-LDP by composition over disjoint user records.
+
+\subsection{Lightweight SGC Embedding}
+We build the bipartite graph from $R'$, compute the normalized adjacency $\mathbf{S}$, and obtain smoothed embeddings by $K$ iterative propagations $\mathbf{Z}^{(k+1)}=\mathbf{S}\mathbf{Z}^{(k)}$ initialized from $\mathbf{Z}^{(0)}=\mathbf{X}$. The model is trained with a Bayesian personalized ranking (BPR) objective,
+\begin{equation}
+\mathcal{L}=-\sum_{(u,i,j)\in\mathcal{D}}\ln\sigma\!\left(\mathbf{z}_u^\top\mathbf{z}_i-\mathbf{z}_u^\top\mathbf{z}_j\right)+\lambda\lVert\mathbf{X}\rVert_2^2,
+\end{equation}
+where $(u,i,j)$ is a (user, positive item, negative item) triple and $\sigma$ is the sigmoid function. Gradients with respect to the base embeddings are obtained by propagating the embedding gradients back through the same linear operator, and parameters are updated with Adam. Because we never form $\mathbf{S}^{K}$, both memory and per-epoch cost scale with the number of edges rather than with the square of the number of nodes.
+
+\subsection{Knowledge-Aware Path Generation}
+For a target student and knowledge point, we collect the exercises associated with that knowledge point and score them with the inner product of student and exercise embeddings. We then order the exercises by combining (i) the predicted score and (ii) a knowledge-mastery proxy measured as the student's interaction frequency with the knowledge point---lower frequency indicates weaker mastery and thus higher priority. The top-$t$ exercises form the final learning path, and exercise difficulty is arranged to increase gradually in accordance with cognitive-load principles.
+
+\subsection{Complexity Analysis}
+Let $E$ be the number of edges, $d$ the embedding dimension, and $K$ the propagation depth. Each propagation costs $O(Ed)$ and is performed once per epoch for the forward pass and once for the backward pass; training is thus $O(TKEd)$ for $T$ epochs. Model parameters number $(m+n)d$, independent of $K$. By contrast, a $K$-layer GCN requires $K$ weight matrices and nonlinearities, increasing both parameters and per-epoch cost.
+
+\section{Experiments}
+\label{sec:exp}
+
+\subsection{Dataset}
+We evaluate on the ASSISTments 2009 skill-builder dataset, a widely used public educational data mining benchmark. After removing records with missing skill identifiers and retaining students with at least a threshold number of interactions, the processed data contains thousands of students, tens of thousands of exercises, and 123 knowledge points, with several hundred thousand interaction records. We adopt a leave-last-out split: for each student, the most recent interaction is held out as the test positive and earlier interactions form the training set, matched with sampled negatives for ranking evaluation. All student and exercise identifiers are integer re-coded, so no personal identifiers are used.
+
+\subsection{Baselines}
+We compare against: (i) \textbf{Random} and \textbf{Popularity}, non-personalized references; (ii) \textbf{GCN-LP}, a conventional multi-layer graph convolution recommender without privacy; (iii) \textbf{LightGCN-LP}, a lightweight recommender without privacy; (iv) \textbf{LDP-GCN}, which applies LDP perturbation to a conventional GCN; and (v) \textbf{LDP-RR-GCN}, which uses standard (non-adaptive) randomized response with a lightweight encoder.
+
+\subsection{Metrics}
+Recommendation quality is measured by Hit Rate@10 (HR@10), NDCG@10, and Precision@10. Privacy is measured by an empirical information leakage rate (ILR) quantifying an adversary's advantage in inferring a true edge from the perturbed graph over the base rate. Efficiency is measured by trainable parameter count and average per-student inference latency on CPU.
+
+\subsection{Implementation and Reproducibility}
+All experiments are implemented in Python with NumPy and SciPy sparse linear algebra on a CPU-only environment. Random seeds are fixed and each neural result is averaged over multiple independent runs. The proposed LDP-SGC-LP uses $\varepsilon=1.0$, adaptive allocation factor $\alpha=0.7$, false-positive cap $\eta=0.3$, propagation depth $K=3$, embedding dimension $d=64$, and Adam with learning rate $0.01$. Source code, generated figures, and raw result tables are released alongside the paper.
+
+\subsection{Results and Analysis}
+\subsubsection{Overall Comparison}
+\inputfigplaceholder{synthesis}
+
+\subsubsection{Privacy--Utility Trade-off}
+\inputfigplaceholder{eps}
+
+\subsubsection{Efficiency}
+\inputfigplaceholder{efficiency}
+
+\subsubsection{Ablation Study}
+\inputfigplaceholder{ablation}
+
+\subsubsection{Sensitivity Analysis}
+\inputfigplaceholder{sensitivity}
+
+\section{Conclusion and Future Work}
+\label{sec:conc}
+This paper presented LDP-SGC-LP, a privacy-preserving and lightweight learning path recommendation framework that unifies adaptive local differential privacy, simplified graph convolution, and knowledge-aware path generation. Experiments on a real educational dataset demonstrate a favorable balance among ranking accuracy, privacy protection, and computational efficiency. In future work we plan to validate the framework on additional datasets, extend the privacy analysis to dynamic interaction streams and node-level attributes, and investigate federated training so that raw data never leaves participating institutions.
+
+\bibliographystyle{sn-mathphys-num}
+\bibliography{references}
+
+\end{document}

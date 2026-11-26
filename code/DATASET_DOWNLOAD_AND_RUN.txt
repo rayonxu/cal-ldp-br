@@ -1,0 +1,134 @@
+=============================================================
+大样本数据下载与实验运行说明（真实数据，不构造样本）
+=============================================================
+
+一、当前本地文件的真实规模（已核对）
+-------------------------------------------------------------
+ASSISTments 2009 corrected : 401,756 行，4,217 用户，26,688 题
+ASSISTments 2015           : 708,631 行，19,917 用户，100 个 skill builder
+ASSISTments 2012（本地为部分）: 255,050 行，1,507 用户；官方全量约 27,066 用户
+EdNet                      : 官方 KT1 约 1.2GB 压缩/5.6GB 解压，784,309 个用户文件
+
+原稿实验只抽了 500 个候选用户，经过最少交互过滤后实际只剩约 290-305 个测试用户，
+这是“样本偏小”的直接原因。全量 ASSISTments 数据已经在本地，不需要重新下载即可扩大。
+
+
+二、官方/可信下载来源
+-------------------------------------------------------------
+1) ASSISTments 2009 corrected（官方页面）
+   页面: https://sites.google.com/site/assistmentsdata/home/2009-2010-assistment-data/skill-builder-data-2009-2010
+   修正版 Google Drive:
+   https://drive.google.com/file/d/1NNXHFRxcArrU0ZJSb9BIL56vmUt5FhlE/view?usp=sharing
+   本地文件名: assist2009_skill_builder_data_corrected.csv
+
+2) ASSISTments 2015（官方页面）
+   页面: https://sites.google.com/site/assistmentsdata/datasets/2015-assistments-skill-builder-data
+   备用镜像: http://base.ustc.edu.cn/data/ASSISTment/2015_100_skill_builders_main_problems.zip
+   解压后把主 CSV 重命名为: assist2015.csv
+   注意: 数据列需含 user_id, log_id, sequence_id；加载器按这三个字段处理。
+
+3) ASSISTments 2012（官方全量，可选）
+   页面: https://sites.google.com/view/assistmentsdatamining/dataset
+   备用镜像: http://base.ustc.edu.cn/data/ASSISTment/2012-2013-data-with-predictions-4-final.zip
+   本地现有 assist2012.csv 为制表符分隔的预处理版本，仅作探索，不进入主结果。
+
+4) EdNet（官方 GitHub；研究用途 CC BY-NC 4.0）
+   https://github.com/riiid/ednet
+   官方下载短链（若 502，请用浏览器重试）：
+     KT1: http://bit.ly/ednet_kt1   1.2GB zip / 5.6GB 解压 / 784,309 文件
+     KT2: http://bit.ly/ednet-kt2   0.6GB zip / 3.1GB 解压
+     KT3: http://bit.ly/ednet-kt3   0.8GB zip / 4.3GB 解压
+     KT4: http://bit.ly/ednet-kt4   1.2GB zip / 6.4GB 解压
+   推荐: KT1 或 KT3。注意 KT1 有两个官方版本：
+     - 旧版列含 bundle_id（可作公开题目组/技能标签）；
+     - 新版列含 solving_id，无 bundle_id。prepare_ednet.py 已兼容两者：
+       有 bundle_id 时用它作 skill，否则用 question_id 本身作占位 skill。
+       主方法 Cal-LDP-BR 不依赖 skill_id，因此不影响主结果。
+   本机实际下载/解压路径: C:\data\EdNet-KT1\KT1\u*.csv（1.2GB zip，784,309 用户文件）
+   EdNet 解压后是海量“每用户一个 CSV”的目录，不能直接喂给实验脚本。
+
+
+三、数据放置位置
+-------------------------------------------------------------
+统一目录:
+  ./data (可通过环境变量 LDP_DATA_DIR 指定)
+
+应有文件:
+  assist2009_skill_builder_data_corrected.csv
+  assist2015.csv
+  assist2012.csv                    （可选）
+  ednet_sampled.csv                 （由 prepare_ednet.py 生成）
+
+
+四、EdNet 采样处理（下载解压后执行）
+-------------------------------------------------------------
+在 PowerShell 中执行（把路径换成你实际解压目录）：
+
+  cd C:\code
+  python prepare_ednet.py --kt 1 --ednet_dir "C:\data\EdNet-KT1\KT1" --users 5000 --seed 42
+
+若使用 KT3：
+
+  python prepare_ednet.py --kt 3 --ednet_dir "D:\datasets\ednet_kt3" --users 5000 --seed 42
+
+参数说明:
+  --users 5000       随机抽取 5000 个用户文件；先用 2000-5000 试跑，内存够再加大
+  --min_user_inter 5 至少保留 5 次交互的用户
+  --max_rows_per_user 0  不截断；若内存不足可设 2000
+输出:
+  ...\data\ednet_sampled.csv
+  列: user_id, item_id, skill_id, timestamp
+
+该脚本只读取公开交互日志并做格式转换；所有 ID 重编码、按时间 leave-last-out 划分由 ds_loader 完成。
+
+
+五、扩大样本后运行实验
+-------------------------------------------------------------
+先备份旧结果（会覆盖 results_v2）：
+
+  copy C:\code\results_v2\all_results_v2.json C:\code\results_v2\all_results_v2_before_large.json
+
+当前主方法 Cal-LDP-BR 使用标准 RR，ε=0.02；基线 LDP 方法使用 ε=1.0。
+加载器已改为严格 leave-last-out：若测试题在该学生早前尝试中出现，也会从训练集移除。
+
+全量 ASSISTments 2009 + 2015，5 个随机种子：
+
+  cd C:\code
+  python ldp_sgc_v2.py --datasets assist2009,assist2015 --users 0 --seeds 5 --epochs 55
+
+先试 2000 用户（推荐第一次运行）：
+
+  python ldp_sgc_v2.py --datasets assist2009,assist2015 --users 2000 --seeds 5 --epochs 55
+
+EdNet：
+
+  python ldp_sgc_v2.py --datasets ednet --users 5000 --seeds 5 --epochs 55
+
+结果输出:
+  C:\code\results_v2\results_<dataset>.json
+  C:\code\results_v2\all_results_v2.json
+  C:\code\figures_v2\*.png
+
+只跑当前主方法 Cal-LDP-BR（快，不需要训练图模型）时建议用：
+
+  python bayes_rank_grid.py --datasets assist2009,assist2015 --users 0 --seeds 5 --eps 0.01,0.02,0.05 --suffix _full
+
+已完成的全量用户实测（严格 leave-last-out，5 seeds，ε=0.02）：
+  ASSISTments 2009: 3114 users, HR@10=0.3972±0.0094, MIA-AUC=0.663
+  ASSISTments 2015: 14567 users, HR@10=0.3689±0.0060, MIA-AUC=0.660
+结果文件: C:\code\results_v2\bayes_rank_grid_full.json
+
+内存提示:
+  - ASSISTments 2009 全量 4217 用户 × 26688 题，随机响应假边规模较大；
+    若机器内存不足，用 --users 2000。
+  - EdNet 不要直接用 78 万用户全量；先抽样 2000-5000 用户。
+  - 若脚本因内存失败，不是数据错误；降低 --users 再跑。
+
+
+六、引用要求
+-------------------------------------------------------------
+ASSISTments 2009 页面要求论文写明精确 URL（见上）。
+EdNet 数据引用:
+  Choi, Y., Lee, Y., Shin, D., et al. EdNet: A Large-Scale Hierarchical Dataset
+  in Education. AIED 2020, pp. 69-73.
+许可证: EdNet 为 CC BY-NC 4.0，仅限研究使用。

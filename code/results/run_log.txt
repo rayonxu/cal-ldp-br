@@ -1,0 +1,39 @@
+Loading REAL ASSISTments 2009 dataset ...
+  users=600 problems=13706 skills=117 train_edges=71997 test_users=600
+
+=== Main performance comparison ===
+  Random               HR=0.0842 NDCG=0.0382 ILR=1.000 Params=0.00M Infer=0.00ms
+  Popularity           HR=0.2508 NDCG=0.1134 ILR=1.000 Params=0.00M Infer=0.00ms
+  GCN-LP               HR=0.2825 NDCG=0.1318 ILR=1.000 Params=0.92M Infer=21.06ms
+  LightGCN-LP          HR=0.2867 NDCG=0.1438 ILR=1.000 Params=0.92M Infer=18.43ms
+  LDP-GCN              HR=0.2433 NDCG=0.1235 ILR=0.421 Params=0.92M Infer=27.74ms
+  LDP-RR-GCN           HR=0.1825 NDCG=0.0843 ILR=0.421 Params=0.92M Infer=19.64ms
+  LDP-SGC-LP (Ours)    HR=0.2317 NDCG=0.1038 ILR=0.709 Params=0.92M Infer=21.13ms
+
+=== Privacy budget epsilon sensitivity (Ours) ===
+  eps=0.3: HR=0.2083 NDCG=0.0895 ILR=0.655
+  eps=0.5: HR=0.2067 NDCG=0.0902 ILR=0.673
+  eps=0.8: HR=0.2433 NDCG=0.1028 ILR=0.696
+  eps=1.0: HR=0.2417 NDCG=0.1070 ILR=0.708
+  eps=1.5: HR=0.2167 NDCG=0.0995 ILR=0.731
+  eps=2.0: HR=0.2133 NDCG=0.1003 ILR=0.745
+
+=== SGC layer K sensitivity ===
+  K=1: HR=0.1567 NDCG=0.0735 infer=8.64ms
+  K=2: HR=0.1700 NDCG=0.0744 infer=14.29ms
+  K=3: HR=0.2417 NDCG=0.1070 infer=21.40ms
+  K=4: HR=0.2400 NDCG=0.1136 infer=27.32ms
+
+=== Embedding dimension sensitivity ===
+  dim=16: HR=0.1883 NDCG=0.0809 params=0.23M
+  dim=32: HR=0.2167 NDCG=0.0913 params=0.46M
+  dim=64: HR=0.2417 NDCG=0.1070 params=0.92M
+  dim=128: HR=0.2383 NDCG=0.1132 params=1.83M
+
+=== Ablation study ===
+  Full LDP-SGC-LP          HR=0.2317 NDCG=0.1038 ILR=0.709
+  w/o Adaptive Budget      HR=0.2433 NDCG=0.1235 ILR=0.421
+  w/o LDP (SGC only)       HR=0.2867 NDCG=0.1438 ILR=1.000
+
+Saved results -> C:\code\results\all_results.json
+Saved figures -> C:\code\figures

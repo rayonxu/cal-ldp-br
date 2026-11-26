@@ -1,0 +1,37 @@
+
+########## DATASET assist2009 ##########
+  users=305 items=10863 skills=114 train=33138
+  skill graph nnz=93025
+  Popularity         HR=0.2334±0.0091 NDCG=0.1131 AUC=0.500 eps=None
+  GCN-LP             HR=0.3659±0.0111 NDCG=0.1948 AUC=1.000 eps=None
+  LightGCN-LP        HR=0.4020±0.0057 NDCG=0.2205 AUC=1.000 eps=None
+  LDP-GCN            HR=0.0826±0.0152 NDCG=0.0394 AUC=0.786 eps=1.0
+  LDP-RR-Light       HR=0.1239±0.0140 NDCG=0.0577 AUC=0.786 eps=1.0
+  LDP-AMP            HR=0.1010±0.0156 NDCG=0.0427 AUC=0.664 eps=None
+  LDP-SGC-LP (Ours)  HR=0.1108±0.0133 NDCG=0.0510 AUC=0.533 eps=1.0
+  --- significance (ours vs LDP baselines) ---
+    vs LDP-GCN        delta=+0.0282 p_t=0.0850 d=+1.77
+    vs LDP-RR-Light   delta=-0.0131 p_t=0.0716 d=-0.86
+    vs LDP-AMP        delta=+0.0098 p_t=0.4569 d=+0.61
+    vs GCN-LP         delta=-0.2551 p_t=0.0000 d=-18.60
+    vs LightGCN-LP    delta=-0.2911 p_t=0.0000 d=-25.37
+
+########## DATASET assist2015 ##########
+  users=290 items=98 skills=98 train=13089
+  skill graph nnz=98
+  Popularity         HR=0.2710±0.0094 NDCG=0.1405 AUC=0.500 eps=None
+  GCN-LP             HR=0.5048±0.0077 NDCG=0.2916 AUC=1.000 eps=None
+  LightGCN-LP        HR=0.5310±0.0102 NDCG=0.3237 AUC=1.000 eps=None
+  LDP-GCN            HR=0.0428±0.0183 NDCG=0.0172 AUC=0.777 eps=1.0
+  LDP-RR-Light       HR=0.1979±0.0223 NDCG=0.0999 AUC=0.777 eps=1.0
+  LDP-AMP            HR=0.0579±0.0133 NDCG=0.0242 AUC=0.657 eps=None
+  LDP-SGC-LP (Ours)  HR=0.0566±0.0106 NDCG=0.0297 AUC=0.617 eps=1.0
+  --- significance (ours vs LDP baselines) ---
+    vs LDP-GCN        delta=+0.0138 p_t=0.3343 d=+0.82
+    vs LDP-RR-Light   delta=-0.1414 p_t=0.0003 d=-7.24
+    vs LDP-AMP        delta=-0.0014 p_t=0.8860 d=-0.10
+    vs GCN-LP         delta=-0.4483 p_t=0.0000 d=-43.21
+    vs LightGCN-LP    delta=-0.4745 p_t=0.0000 d=-40.75
+
+Saved all_results_v2.json
+Figures saved to C:\code\figures_v2

@@ -1,0 +1,17 @@
+[
+  "[1] Kipf T N, Welling M. Semi-Supervised Classification with Graph Convolutional Networks[C]//International Conference on Learning Representations (ICLR). 2017.",
+  "[2] Zhang S, Yao L, Sun A, Tay Y. Deep Learning Based Recommender System: A Survey and New Perspectives[J]. ACM Computing Surveys, 2019, 52(1): 1-38. DOI: 10.1145/3285029.",
+  "[3] Duchi J C, Jordan M I, Wainwright M J. Local Privacy and Statistical Minimax Rates[C]//IEEE Annual Symposium on Foundations of Computer Science (FOCS). IEEE, 2013: 429-438. DOI: 10.1109/FOCS.2013.53.",
+  "[4] Wu F, Souza A, Zhang T, Fifty C, Yu T, Weinberger K Q. Simplifying Graph Convolutional Networks[C]//International Conference on Machine Learning (ICML). PMLR, 2019: 6861-6871.",
+  "[5] He X, Deng K, Wang X, Li Y, Zhang Y, Wang M. LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation[C]//ACM SIGIR Conference on Research and Development in Information Retrieval. ACM, 2020: 639-648. DOI: 10.1145/3397271.3401063.",
+  "[6] Vaswani A, Shazeer N, Parmar N, et al. Attention Is All You Need[C]//Advances in Neural Information Processing Systems. 2017, 30: 5998-6008.",
+  "[7] Dwork C, McSherry F, Nissim K, Smith A. Calibrating Noise to Sensitivity in Private Data Analysis[C]//Theory of Cryptography Conference (TCC). Springer, 2006: 265-284. DOI: 10.1007/11681878_14.",
+  "[8] Kairouz P, Oh S, Viswanathan K. Discrete Distribution Estimation under Local Privacy[C]//International Conference on Machine Learning (ICML). PMLR, 2016: 2436-2444.",
+  "[9] Choi Y, Lee Y, Shin D, Cho J, Park S, Lee S, Baek J, Bae C, Kim B, Heo J. EdNet: A Large-Scale Hierarchical Dataset in Education[C]//Artificial Intelligence in Education (AIED 2020), LNCS 12164. Springer, 2020: 69-73. DOI: 10.1007/978-3-030-52240-7_13.",
+  "[10] Piech C, Bassen J, Huang J, Ganguli S, Sahami M, Guibas L J, Sohl-Dickstein J. Deep Knowledge Tracing[C]//Advances in Neural Information Processing Systems. 2015, 28: 505-513.",
+  "[11] Feng M, Heffernan N T, Koedinger K R. Addressing the Assessment Challenge with an Online System that Tutors as it Assesses[J]. User Modeling and User-Adapted Interaction, 2009, 19(3): 243-266. DOI: 10.1007/s11257-008-9060-8.",
+  "[12] Ying R, He R, Chen K, Eksombatchai P, Hamilton W L, Leskovec J. Graph Convolutional Neural Networks for Web-Scale Recommender Systems[C]//ACM SIGKDD International Conference on Knowledge Discovery and Data Mining. ACM, 2018: 974-983. DOI: 10.1145/3219819.3219890.",
+  "[13] Wu Z, Pan S, Chen F, Long G, Zhang C, Philip S Y. A Comprehensive Survey on Graph Neural Networks[J]. IEEE Transactions on Neural Networks and Learning Systems, 2021, 32(1): 4-24. DOI: 10.1109/TNNLS.2020.2978386.",
+  "[14] Nissim K, Raskhodnikova S, Smith A. Smooth Sensitivity and Sampling in Private Data Analysis[C]//Annual ACM Symposium on Theory of Computing (STOC). ACM, 2007: 75-84. DOI: 10.1145/1250790.1250803.",
+  "[15] Wang X, He X, Wang M, Feng F, Chua T S. Neural Graph Collaborative Filtering[C]//ACM SIGIR Conference on Research and Development in Information Retrieval. ACM, 2019: 165-174. DOI: 10.1145/3331184.3331267."
+]
